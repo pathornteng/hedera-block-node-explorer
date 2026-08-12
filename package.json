@@ -1,0 +1,30 @@
+{
+  "name": "hedera-block-node-explorer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n server,vite -c cyan,magenta \"npm run dev:server\" \"npm run dev:frontend\"",
+    "dev:server": "node server/index.js",
+    "dev:frontend": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "@ohmpathorn/block-node-client": "^0.1.1",
+    "express": "^4.19.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "concurrently": "^9.0.0",
+    "oxlint": "^1.75.0",
+    "vite": "^8.2.0"
+  }
+}
