@@ -41,7 +41,11 @@ export function useEntityMonitor(endpoint) {
 
       if (data.type === 'status') {
         setStreamStatus(data);
-        if (data.code !== 1) setConnStatus('error');
+        setConnStatus(data.code === 1 ? 'connected' : 'error');
+      } else if (data.type === 'reconnecting') {
+        // The underlying block stream dropped on its own (not a user Stop) —
+        // resuming from the next block, not a real disconnect.
+        setConnStatus('connecting');
       } else if (data.type === 'scanned') {
         setScannedBlock(data.blockNumber);
       } else if (data.type === 'blockError') {

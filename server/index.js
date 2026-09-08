@@ -333,14 +333,14 @@ wssMonitor.on('connection', (ws, req) => {
   const client = makeClient(endpoint);
   let handle = null;
   let closed = false;
+  let lastBlock = null;
 
-  client.serverStatus().then(status => {
-    // If the client disconnected while this was in flight, don't open a
-    // subscription nobody will ever cancel.
-    if (closed) { try { client.close(); } catch {} return; }
-
-    const last = BigInt(status.lastAvailableBlock);
-    const startBlock = last > 5n ? last - 5n : 0n;
+  // The subscribeBlockStream call ends on its own from time to time (the
+  // block node — or infra in front of it — appears to cap how long a single
+  // stream stays open). That's not something the user asked to stop, so
+  // resume from the next block instead of silently going idle.
+  function startSubscription(startBlock) {
+    if (closed) return;
 
     handle = client.subscribeBlockStream(
       { startBlockNumber: startBlock, endBlockNumber: 0n },
@@ -349,6 +349,7 @@ wssMonitor.on('connection', (ws, req) => {
 
         onBlock: (blockNumber, items) => {
           if (closed) return;
+          lastBlock = blockNumber;
           try {
             const txs = decodeTransactionsFromItems(items);
             const matches = txs.filter(tx => txMatchesEntity(tx, parsed, entityType));
@@ -366,13 +367,45 @@ wssMonitor.on('connection', (ws, req) => {
           }
         },
 
-        onError: (err) => sendJson(ws, { type: 'error', message: err.message }),
+        onError: (err) => {
+          if (closed) return;
+          sendJson(ws, { type: 'reconnecting', message: err.message });
+          scheduleResume();
+        },
         onEnd: () => {
-          sendJson(ws, { type: 'end' });
-          try { client.close(); } catch {}
+          if (closed) return;
+          sendJson(ws, { type: 'reconnecting' });
+          scheduleResume();
         },
       }
     );
+  }
+
+  function scheduleResume() {
+    setTimeout(() => {
+      if (closed) return;
+      if (lastBlock != null) {
+        startSubscription(lastBlock + 1n);
+        return;
+      }
+      client.serverStatus().then(status => {
+        if (closed) return;
+        const last = BigInt(status.lastAvailableBlock);
+        startSubscription(last > 5n ? last - 5n : 0n);
+      }).catch(err => {
+        sendJson(ws, { type: 'error', message: err.message });
+        try { client.close(); } catch {}
+      });
+    }, 1000);
+  }
+
+  client.serverStatus().then(status => {
+    // If the client disconnected while this was in flight, don't open a
+    // subscription nobody will ever cancel.
+    if (closed) { try { client.close(); } catch {} return; }
+
+    const last = BigInt(status.lastAvailableBlock);
+    startSubscription(last > 5n ? last - 5n : 0n);
   }).catch(err => {
     sendJson(ws, { type: 'error', message: err.message });
     try { client.close(); } catch {}
@@ -397,12 +430,13 @@ wss.on('connection', (ws, req) => {
   const client = makeClient(endpoint);
   let handle = null;
   let closed = false;
+  let lastBlock = null;
 
-  client.serverStatus().then(status => {
-    if (closed) { try { client.close(); } catch {} return; }
-
-    const last = BigInt(status.lastAvailableBlock);
-    const startBlock = last > 5n ? last - 5n : 0n;
+  // See the analogous comment in the /ws/monitor handler: the underlying
+  // subscription ends on its own from time to time and that's not a user
+  // Stop, so resume from the next block instead of going idle.
+  function startSubscription(startBlock) {
+    if (closed) return;
 
     handle = client.subscribeBlockStream(
       { startBlockNumber: startBlock, endBlockNumber: 0n },
@@ -410,6 +444,9 @@ wss.on('connection', (ws, req) => {
         onStatus: (code, name) => sendJson(ws, { type: 'status', code, name }),
 
         onBlock: (blockNumber, items) => {
+          if (closed) return;
+          lastBlock = blockNumber;
+
           const txItems = items.filter(i => i.kind === 'event_transaction');
           const results = items.filter(i => i.kind === 'transaction_result');
 
@@ -443,13 +480,43 @@ wss.on('connection', (ws, req) => {
           });
         },
 
-        onError: (err) => sendJson(ws, { type: 'error', message: err.message }),
+        onError: (err) => {
+          if (closed) return;
+          sendJson(ws, { type: 'reconnecting', message: err.message });
+          scheduleResume();
+        },
         onEnd: () => {
-          sendJson(ws, { type: 'end' });
-          try { client.close(); } catch {}
+          if (closed) return;
+          sendJson(ws, { type: 'reconnecting' });
+          scheduleResume();
         },
       }
     );
+  }
+
+  function scheduleResume() {
+    setTimeout(() => {
+      if (closed) return;
+      if (lastBlock != null) {
+        startSubscription(lastBlock + 1n);
+        return;
+      }
+      client.serverStatus().then(status => {
+        if (closed) return;
+        const last = BigInt(status.lastAvailableBlock);
+        startSubscription(last > 5n ? last - 5n : 0n);
+      }).catch(err => {
+        sendJson(ws, { type: 'error', message: err.message });
+        try { client.close(); } catch {}
+      });
+    }, 1000);
+  }
+
+  client.serverStatus().then(status => {
+    if (closed) { try { client.close(); } catch {} return; }
+
+    const last = BigInt(status.lastAvailableBlock);
+    startSubscription(last > 5n ? last - 5n : 0n);
   }).catch(err => {
     sendJson(ws, { type: 'error', message: err.message });
     try { client.close(); } catch {}
