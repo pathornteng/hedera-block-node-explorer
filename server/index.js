@@ -10,7 +10,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const server = createServer(app);
-const wss = new WebSocketServer({ server, path: '/ws/stream' });
+const wss = new WebSocketServer({ noServer: true });
+const wssMonitor = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (req, socket, head) => {
+  const { pathname } = new URL(req.url, 'http://localhost');
+
+  if (pathname === '/ws/stream') {
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+  } else if (pathname === '/ws/monitor') {
+    wssMonitor.handleUpgrade(req, socket, head, (ws) => wssMonitor.emit('connection', ws, req));
+  } else {
+    socket.destroy();
+  }
+});
 
 const DEFAULT_ENDPOINT = 's01.test.blk.ams.lat.ope.eng.hashgraph.io';
 
@@ -218,6 +231,125 @@ if (existsSync(distPath)) {
     res.sendFile(join(distPath, 'index.html'));
   });
 }
+
+// ── Account / token monitor helpers ─────────────────────
+
+function parseEntityId(id) {
+  const m = String(id).trim().match(/^(?:(\d+)\.(\d+)\.)?(\d+)$/);
+  if (!m) return null;
+  return {
+    shardNum: m[1] ? m[1] : '0',
+    realmNum: m[2] ? m[2] : '0',
+    num:      m[3],
+  };
+}
+
+function accountIdMatches(accountId, parsed) {
+  if (!accountId) return false;
+  return (
+    String(accountId.shardNum ?? '0') === parsed.shardNum &&
+    String(accountId.realmNum ?? '0') === parsed.realmNum &&
+    String(accountId.accountNum) === parsed.num
+  );
+}
+
+function tokenIdMatches(tokenId, parsed) {
+  if (!tokenId) return false;
+  return (
+    String(tokenId.shardNum ?? '0') === parsed.shardNum &&
+    String(tokenId.realmNum ?? '0') === parsed.realmNum &&
+    String(tokenId.tokenNum) === parsed.num
+  );
+}
+
+function txMatchesEntity(tx, parsed, entityType) {
+  if (entityType === 'token') {
+    if (tokenIdMatches(tx.receipt?.tokenId, parsed)) return true;
+    return (tx.tokenTransfers || []).some(tt => tokenIdMatches(tt.tokenId, parsed));
+  }
+
+  if (accountIdMatches(tx.transactionId?.accountId, parsed)) return true;
+  if (accountIdMatches(tx.receipt?.accountId, parsed)) return true;
+  if ((tx.transfers || []).some(t => accountIdMatches(t.accountId, parsed))) return true;
+  return (tx.tokenTransfers || []).some(tt =>
+    (tt.transfers || []).some(t => accountIdMatches(t.accountId, parsed)) ||
+    (tt.nftTransfers || []).some(n =>
+      accountIdMatches(n.senderAccountId, parsed) || accountIdMatches(n.receiverAccountId, parsed)
+    )
+  );
+}
+
+wssMonitor.on('connection', (ws, req) => {
+  const url        = new URL(req.url, 'http://localhost');
+  const endpoint   = url.searchParams.get('endpoint') || DEFAULT_ENDPOINT;
+  const entityType = url.searchParams.get('type') === 'token' ? 'token' : 'account';
+  const parsed     = parseEntityId(url.searchParams.get('id'));
+
+  if (!parsed) {
+    sendJson(ws, { type: 'error', message: 'Invalid ID. Expected format: 0.0.1234' });
+    ws.close();
+    return;
+  }
+
+  const client = makeClient(endpoint);
+  let handle = null;
+  let closed = false;
+
+  client.serverStatus().then(status => {
+    const last = BigInt(status.lastAvailableBlock);
+    const startBlock = last > 5n ? last - 5n : 0n;
+
+    handle = client.subscribeBlockStream(
+      { startBlockNumber: startBlock, endBlockNumber: 0n },
+      {
+        onStatus: (code, name) => sendJson(ws, { type: 'status', code, name }),
+
+        onBlock: (blockNumber) => {
+          if (closed) return;
+          client.getBlockTransactions({ blockNumber })
+            .then(txs => {
+              if (closed) return;
+              const matches = txs.filter(tx => txMatchesEntity(tx, parsed, entityType));
+              if (matches.length > 0) {
+                sendJson(ws, {
+                  type: 'match',
+                  blockNumber,
+                  transactions: safeJson(matches),
+                  receivedAt: Date.now(),
+                });
+              }
+              sendJson(ws, { type: 'scanned', blockNumber, receivedAt: Date.now() });
+            })
+            // A single block can transiently fail to decode right as it lands
+            // (blockAccess service can lag a moment behind the subscriber stream) —
+            // this is not fatal to the connection, so it gets its own message type.
+            .catch(err => sendJson(ws, { type: 'blockError', blockNumber, message: err.message }));
+        },
+
+        onError: (err) => sendJson(ws, { type: 'error', message: err.message }),
+        onEnd: () => {
+          sendJson(ws, { type: 'end' });
+          try { client.close(); } catch {}
+        },
+      }
+    );
+  }).catch(err => {
+    sendJson(ws, { type: 'error', message: err.message });
+    try { client.close(); } catch {}
+  });
+
+  ws.on('close', () => {
+    closed = true;
+    if (handle) { try { handle.cancel(); } catch {} }
+    try { client.close(); } catch {}
+  });
+
+  ws.on('error', () => {
+    closed = true;
+    if (handle) { try { handle.cancel(); } catch {} }
+    try { client.close(); } catch {}
+  });
+});
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, 'http://localhost');

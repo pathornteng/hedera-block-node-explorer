@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import BlockExplorer from './pages/BlockExplorer';
 import Search from './pages/Search';
 import LiveStream from './pages/LiveStream';
+import Monitor from './pages/Monitor';
 
 const DEFAULT_ENDPOINT = 's01.test.blk.ams.lat.ope.eng.hashgraph.io';
 
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="explorer" element={<BlockExplorer />} />
             <Route path="search" element={<Search />} />
             <Route path="stream" element={<LiveStream />} />
+            <Route path="monitor" element={<Monitor />} />
           </Route>
         </Routes>
       </BrowserRouter>

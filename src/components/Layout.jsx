@@ -73,6 +73,16 @@ function IconStream() {
   );
 }
 
+function IconMonitor() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="8" cy="8" r="6.5"/>
+      <circle cx="8" cy="8" r="3"/>
+      <circle cx="8" cy="8" r="0.75" fill="currentColor" stroke="none"/>
+    </svg>
+  );
+}
+
 function IconClose() {
   return (
     <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -215,6 +225,11 @@ export default function Layout({ endpoint, setEndpoint }) {
             className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
             <IconStream />
             Live Stream
+          </NavLink>
+          <NavLink to="/monitor" onClick={close}
+            className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+            <IconMonitor />
+            Monitor
           </NavLink>
         </nav>
 
