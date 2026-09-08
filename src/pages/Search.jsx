@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useEndpoint } from '../App';
+import VerificationBadge from '../components/VerificationBadge';
 import { formatNumber, formatHbar, formatTxType, formatTransactionId, getStatusVariant } from '../utils/format';
 
 function Field({ label, value, mono = false, className = '' }) {
@@ -154,6 +155,8 @@ function TxResult({ result }) {
         )}
 
         <TokenTransferSection tokenTransfers={tx.tokenTransfers} />
+
+        <VerificationBadge verification={tx.verification} />
 
         {tx.signatures?.length > 0 && (
           <div className="tx-section">

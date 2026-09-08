@@ -5,6 +5,10 @@ import { BlockNodeClient, decodeFullTransactionsFromBlockItem } from '@ohmpathor
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
 import { existsSync } from 'fs';
+import { createHash } from 'crypto';
+import { ed25519 } from '@noble/curves/ed25519.js';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { keccak_256 } from '@noble/hashes/sha3.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -39,6 +43,64 @@ function safeJson(obj) {
   return JSON.parse(JSON.stringify(obj, (_, v) =>
     typeof v === 'bigint' ? v.toString() : v
   ));
+}
+
+// ── Transaction verification ────────────────────────────
+//
+// Two independent checks, both provable from data the block node itself
+// gives us — no external account-key lookup involved:
+//
+//  - signature: does this signature cryptographically validate against the
+//    stated public key, over this exact transaction body? Proves the
+//    content wasn't tampered with and the key holder really produced this
+//    signature. Does NOT prove that key is actually authorized for the
+//    payer account — that requires an account-info lookup this app doesn't
+//    have (see the caveat surfaced in the UI).
+//  - hash: does SHA-384(signedTransactionBytes) match the recorded
+//    transactionHash? Only available once a block has settled into
+//    record-file format, since that's where the hash is recorded.
+//
+// Ed25519 signs bodyBytes directly. ECDSA secp256k1 signs
+// keccak256(bodyBytes) as a raw 64-byte r||s pair (HIP-222) — note
+// `{ prehash: false }` is required or noble hashes the digest a second
+// time internally and every signature "fails".
+function verifyTransaction(tx) {
+  const verification = { hash: 'unavailable', signatures: [] };
+
+  if (tx.signedTransactionBytes && tx.transactionHash) {
+    const computed = createHash('sha384').update(tx.signedTransactionBytes).digest();
+    verification.hash = computed.equals(tx.transactionHash) ? 'match' : 'mismatch';
+  }
+
+  if (tx.bodyBytes) {
+    for (const sig of tx.signatures || []) {
+      let valid = 'unsupported';
+      try {
+        const pubKey = Buffer.from(sig.pubKeyPrefix, 'hex');
+        const sigBytes = Buffer.from(sig.signature, 'hex');
+        if (sig.type === 'ed25519' && pubKey.length === 32) {
+          valid = ed25519.verify(sigBytes, tx.bodyBytes, pubKey) ? 'valid' : 'invalid';
+        } else if (sig.type === 'ecdsa_secp256k1' && pubKey.length === 33) {
+          const digest = keccak_256(tx.bodyBytes);
+          valid = secp256k1.verify(sigBytes, digest, pubKey, { prehash: false, lowS: false }) ? 'valid' : 'invalid';
+        }
+      } catch {
+        valid = 'error';
+      }
+      verification.signatures.push({ type: sig.type, valid });
+    }
+  }
+
+  return verification;
+}
+
+// Attaches `verification` and strips the raw buffers it consumed —
+// they're only needed server-side, no reason to ship them to the browser.
+function attachVerification(tx) {
+  tx.verification = verifyTransaction(tx);
+  delete tx.bodyBytes;
+  delete tx.signedTransactionBytes;
+  return tx;
 }
 
 function sendJson(ws, data) {
@@ -112,6 +174,7 @@ app.get('/api/block/:number/transactions', async (req, res) => {
   const client = makeClient(getEndpoint(req.query));
   try {
     const txs = await client.getBlockTransactions({ blockNumber: BigInt(req.params.number) });
+    txs.forEach(attachVerification);
     res.json(safeJson(txs));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -211,6 +274,7 @@ app.get('/api/search', async (req, res) => {
       const txs   = await client.getBlockTransactions({ blockNumber: BigInt(blockNum) });
       const found = txs.find(tx => txMatchesParsed(tx, parsed));
       if (found) {
+        attachVerification(found);
         return res.json(safeJson({ tx: found, blockNumber: blockNum }));
       }
     }
@@ -354,6 +418,7 @@ wssMonitor.on('connection', (ws, req) => {
             const txs = decodeTransactionsFromItems(items);
             const matches = txs.filter(tx => txMatchesEntity(tx, parsed, entityType));
             if (matches.length > 0) {
+              matches.forEach(attachVerification);
               sendJson(ws, {
                 type: 'match',
                 blockNumber,

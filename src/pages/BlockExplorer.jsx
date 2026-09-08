@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useEndpoint } from '../App';
+import VerificationBadge from '../components/VerificationBadge';
 import {
   formatNumber, formatHbar, formatTxType, formatTransactionId,
   getStatusVariant, truncate,
@@ -360,6 +361,8 @@ function TransactionDetailInline({ tx }) {
       </div>
 
       <TokenTransfers tokenTransfers={tx.tokenTransfers} />
+
+      <VerificationBadge verification={tx.verification} />
 
       {tx.signatures?.length > 0 && (
         <div className="tx-detail-extra">
