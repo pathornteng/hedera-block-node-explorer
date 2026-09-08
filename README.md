@@ -8,7 +8,7 @@ A web application for exploring and querying Hedera block nodes in real time, bu
 - **Transaction Detail** — In the Transactions tab, click any row to expand full inline transaction details: status, fee, receipt fields, HBAR transfers, token transfers, and signatures.
 - **Transaction Search** — Search by Hedera transaction ID (`0.0.account@seconds.nanos`). Uses binary search across the block range to locate the transaction in seconds.
 - **Live Block Stream** — Subscribe to the block stream in real time and watch new blocks and transactions arrive as they are produced.
-- **Multi-endpoint support** — Switch between Previewnet, Testnet, and Mainnet block nodes from the sidebar, or enter a custom `host:port`.
+- **Multi-endpoint support** — Switch between Previewnet, Testnet, and Mainnet block nodes from the sidebar, or enter a custom hostname.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ Express + WebSocket server (:3001)
     │
     │  gRPC (plain, tls: insecure)
     ▼
-Hedera Block Node (port 40840)
+Hedera Block Node (ports 40980/40981/40982)
 ```
 
 The browser cannot connect to a standard gRPC server directly (no HTTP/2 trailer support). The Express backend acts as the protocol translation layer, exposing REST and WebSocket endpoints that the React frontend consumes.
@@ -71,16 +71,16 @@ All routes accept an optional `endpoint` query parameter to target a specific bl
 
 ## Supported Block Nodes
 
-All endpoints use port `40840` with plain gRPC (`tls: insecure`).
+Endpoints are hostnames only (no port) with plain gRPC (`tls: insecure`). The SDK connects to fixed ports per service: `40980` (subscriber), `40981` (blockAccess), `40982` (serverStatus).
 
 | Network | Node | Host |
 |---|---|---|
-| Previewnet | lfh01 | `lfh01.previewnet.blocknode.hashgraph-devops.com:40840` |
-| Previewnet | lfh02 | `lfh02.previewnet.blocknode.hashgraph-devops.com:40840` |
-| Testnet | Amsterdam | `s01.test.blk.ams.lat.ope.eng.hashgraph.io:40840` |
-| Testnet | Singapore | `s01.test.blk.sgp.lat.ope.eng.hashgraph.io:40840` |
-| Testnet | Chicago | `s01.test.blk.chi.lat.ope.eng.hashgraph.io:40840` |
-| Mainnet | Swirlds (Chicago) | `s03.main.blk.chi.lat.ope.eng.hashgraph.io:40840` |
+| Previewnet | lfh01 | `lfh01.previewnet.blocknode.hashgraph-devops.com` |
+| Previewnet | lfh02 | `lfh02.previewnet.blocknode.hashgraph-devops.com` |
+| Testnet | Amsterdam | `s01.test.blk.ams.lat.ope.eng.hashgraph.io` |
+| Testnet | Singapore | `s01.test.blk.sgp.lat.ope.eng.hashgraph.io` |
+| Testnet | Chicago | `s01.test.blk.chi.lat.ope.eng.hashgraph.io` |
+| Mainnet | Swirlds (Chicago) | `s03.main.blk.chi.lat.ope.eng.hashgraph.io` |
 
 ## Transaction Search
 

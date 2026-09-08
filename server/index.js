@@ -12,7 +12,7 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws/stream' });
 
-const DEFAULT_ENDPOINT = 's01.test.blk.ams.lat.ope.eng.hashgraph.io:40840';
+const DEFAULT_ENDPOINT = 's01.test.blk.ams.lat.ope.eng.hashgraph.io';
 
 function getEndpoint(query) {
   return (query?.endpoint && String(query.endpoint).trim()) || DEFAULT_ENDPOINT;

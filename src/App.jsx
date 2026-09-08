@@ -6,7 +6,7 @@ import BlockExplorer from './pages/BlockExplorer';
 import Search from './pages/Search';
 import LiveStream from './pages/LiveStream';
 
-const DEFAULT_ENDPOINT = 's01.test.blk.ams.lat.ope.eng.hashgraph.io:40840';
+const DEFAULT_ENDPOINT = 's01.test.blk.ams.lat.ope.eng.hashgraph.io';
 
 export const EndpointContext = createContext(DEFAULT_ENDPOINT);
 export function useEndpoint() { return useContext(EndpointContext); }

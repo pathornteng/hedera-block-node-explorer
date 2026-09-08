@@ -5,27 +5,27 @@ const ENDPOINT_GROUPS = [
   {
     label: 'Previewnet',
     options: [
-      { label: 'lfh01', value: 'lfh01.previewnet.blocknode.hashgraph-devops.com:40840' },
-      { label: 'lfh02', value: 'lfh02.previewnet.blocknode.hashgraph-devops.com:40840' },
+      { label: 'lfh01', value: 'lfh01.previewnet.blocknode.hashgraph-devops.com' },
+      { label: 'lfh02', value: 'lfh02.previewnet.blocknode.hashgraph-devops.com' },
     ],
   },
   {
     label: 'Testnet',
     options: [
-      { label: 'Amsterdam',    value: 's01.test.blk.ams.lat.ope.eng.hashgraph.io:40840' },
-      { label: 'Singapore',    value: 's01.test.blk.sgp.lat.ope.eng.hashgraph.io:40840' },
-      { label: 'Chicago',      value: 's01.test.blk.chi.lat.ope.eng.hashgraph.io:40840' },
-      { label: 'Tier 2 lfh01', value: 'lfh01.testnet.blocknode.hashgraph-devops.com:40840' },
+      { label: 'Amsterdam',    value: 's01.test.blk.ams.lat.ope.eng.hashgraph.io' },
+      { label: 'Singapore',    value: 's01.test.blk.sgp.lat.ope.eng.hashgraph.io' },
+      { label: 'Chicago',      value: 's01.test.blk.chi.lat.ope.eng.hashgraph.io' },
+      { label: 'Tier 2 lfh01', value: 'lfh01.testnet.blocknode.hashgraph-devops.com' },
     ],
   },
   {
     label: 'Mainnet',
     options: [
-      { label: 'Swirlds (Chicago)', value: 's03.main.blk.chi.lat.ope.eng.hashgraph.io:40840' },
-      { label: 'B4E',               value: '46.21.97.212:40840' },
-      { label: 'BitGo',             value: '162.43.189.97:40840' },
-      { label: 'EDF',               value: '163.114.159.114:40840' },
-      { label: '82.223.201.227',    value: '82.223.201.227:40840' },
+      { label: 'Swirlds (Chicago)', value: 's03.main.blk.chi.lat.ope.eng.hashgraph.io' },
+      { label: 'B4E',               value: '46.21.97.212' },
+      { label: 'BitGo',             value: '162.43.189.97' },
+      { label: 'EDF',               value: '163.114.159.114' },
+      { label: '82.223.201.227',    value: '82.223.201.227' },
     ],
   },
   {
@@ -126,7 +126,7 @@ function EndpointSelector({ endpoint, setEndpoint }) {
         <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
           <input
             type="text"
-            placeholder="host:port"
+            placeholder="host"
             value={customInput}
             onChange={e => setCustomInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleCustomApply()}
@@ -150,7 +150,7 @@ function EndpointSelector({ endpoint, setEndpoint }) {
       )}
 
       <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-3)' }}>
-        All endpoints use port 40840
+        Enter a hostname only — ports are fixed (40980/40981/40982)
       </div>
     </div>
   );
