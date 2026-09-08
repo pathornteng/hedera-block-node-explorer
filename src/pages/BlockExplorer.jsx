@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useEndpoint } from '../App';
 import VerificationBadge from '../components/VerificationBadge';
+import RawJsonView from '../components/RawJsonView';
 import {
   formatNumber, formatHbar, formatTxType, formatTransactionId,
   getStatusVariant, truncate,
@@ -379,6 +380,10 @@ function TransactionDetailInline({ tx }) {
           </div>
         </div>
       )}
+
+      <div className="tx-detail-extra">
+        <RawJsonView data={tx} />
+      </div>
     </div>
   );
 }

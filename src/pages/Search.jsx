@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useEndpoint } from '../App';
 import VerificationBadge from '../components/VerificationBadge';
+import RawJsonView from '../components/RawJsonView';
 import { formatNumber, formatHbar, formatTxType, formatTransactionId, getStatusVariant } from '../utils/format';
 
 function Field({ label, value, mono = false, className = '' }) {
@@ -176,6 +177,8 @@ function TxResult({ result }) {
             )}
           </div>
         )}
+
+        <RawJsonView data={tx} />
       </div>
     </div>
   );

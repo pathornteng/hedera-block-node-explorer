@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useEndpoint } from '../App';
 import { useEntityMonitor } from '../hooks/useEntityMonitor';
 import VerificationBadge from '../components/VerificationBadge';
+import RawJsonView from '../components/RawJsonView';
 import { formatNumber, formatHbar, formatTxType, formatTransactionId, getStatusVariant, truncate } from '../utils/format';
 
 const ID_PATTERN = /^(?:\d+\.\d+\.)?\d+$/;
@@ -137,6 +138,8 @@ function TransactionDetailInline({ tx }) {
       <TokenTransfers tokenTransfers={tx.tokenTransfers} />
 
       <VerificationBadge verification={tx.verification} />
+
+      <RawJsonView data={tx} />
 
       <div style={{ marginTop: 10 }}>
         <Link
