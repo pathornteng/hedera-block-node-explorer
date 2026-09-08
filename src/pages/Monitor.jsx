@@ -242,7 +242,6 @@ export default function Monitor() {
               value={entityType}
               onChange={e => setEntityType(e.target.value)}
               disabled={isLive}
-              style={{ maxWidth: 140 }}
             >
               <option value="account">Account ID</option>
               <option value="token">Token ID</option>
