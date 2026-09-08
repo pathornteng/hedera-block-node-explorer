@@ -9,7 +9,12 @@ export function useBlockStream(endpoint) {
 
   const disconnect = useCallback(() => {
     const ws = wsRef.current;
-    if (ws && ws.readyState < 2) ws.close();
+    if (ws) {
+      ws.onmessage = null;
+      ws.onerror = null;
+      ws.onclose = null;
+      if (ws.readyState < 2) ws.close();
+    }
     wsRef.current = null;
     setConnStatus('idle');
   }, []);

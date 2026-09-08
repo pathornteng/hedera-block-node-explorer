@@ -296,6 +296,10 @@ wssMonitor.on('connection', (ws, req) => {
   let closed = false;
 
   client.serverStatus().then(status => {
+    // If the client disconnected while this was in flight, don't open a
+    // subscription nobody will ever cancel.
+    if (closed) { try { client.close(); } catch {} return; }
+
     const last = BigInt(status.lastAvailableBlock);
     const startBlock = last > 5n ? last - 5n : 0n;
 
@@ -356,8 +360,11 @@ wss.on('connection', (ws, req) => {
   const endpoint = url.searchParams.get('endpoint') || DEFAULT_ENDPOINT;
   const client = makeClient(endpoint);
   let handle = null;
+  let closed = false;
 
   client.serverStatus().then(status => {
+    if (closed) { try { client.close(); } catch {} return; }
+
     const last = BigInt(status.lastAvailableBlock);
     const startBlock = last > 5n ? last - 5n : 0n;
 
@@ -413,11 +420,13 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
+    closed = true;
     if (handle) { try { handle.cancel(); } catch {} }
     try { client.close(); } catch {}
   });
 
   ws.on('error', () => {
+    closed = true;
     if (handle) { try { handle.cancel(); } catch {} }
     try { client.close(); } catch {}
   });

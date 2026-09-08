@@ -9,7 +9,14 @@ export function useEntityMonitor(endpoint) {
 
   const disconnect = useCallback(() => {
     const ws = wsRef.current;
-    if (ws && ws.readyState < 2) ws.close();
+    if (ws) {
+      // Detach handlers first so any messages already in flight over the wire
+      // can't sneak in a state update after the user asked to stop.
+      ws.onmessage = null;
+      ws.onerror = null;
+      ws.onclose = null;
+      if (ws.readyState < 2) ws.close();
+    }
     wsRef.current = null;
     setConnStatus('idle');
   }, []);
