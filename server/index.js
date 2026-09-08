@@ -1,7 +1,7 @@
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
-import { BlockNodeClient } from '@ohmpathorn/block-node-client';
+import { BlockNodeClient, decodeFullTransactionsFromBlockItem } from '@ohmpathorn/block-node-client';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
 import { existsSync } from 'fs';
@@ -262,6 +262,45 @@ function tokenIdMatches(tokenId, parsed) {
   );
 }
 
+// Decodes full transactions directly from the BlockItems the subscription
+// already delivered, mirroring client.getBlockTransactions()'s own pairing
+// logic. Avoids a second async RPC per block, so matching a block has no
+// async gap left after handle.cancel() is called — a client that stops
+// watching truly stops immediately, with nothing left in flight.
+function decodeTransactionsFromItems(items) {
+  const hasRecordFile = items.some(i => i.kind === 'record_file');
+  const txs = [];
+
+  if (hasRecordFile) {
+    for (const item of items) {
+      if (item.kind === 'record_file') {
+        txs.push(...decodeFullTransactionsFromBlockItem(item.raw));
+      }
+    }
+    return txs;
+  }
+
+  let pending = null;
+  for (const item of items) {
+    if (item.kind === 'event_transaction') {
+      if (item.payload?.kind === 'application' && item.payload.raw?.length > 0) {
+        const full = decodeFullTransactionsFromBlockItem(item.raw);
+        pending = full.length > 0 ? full[0] : null;
+      }
+    } else if (item.kind === 'transaction_result' && pending) {
+      const res = item.payload;
+      pending.receipt = { status: res.status, statusName: res.statusName };
+      if (res.consensusTimestamp) pending.consensusTimestamp = res.consensusTimestamp;
+      if (res.transactionHash?.length) pending.transactionHash = res.transactionHash;
+      if (res.transactionFee) pending.transactionFee = res.transactionFee;
+      if (res.transfers?.length) pending.transfers = res.transfers;
+      txs.push(pending);
+      pending = null;
+    }
+  }
+  return txs;
+}
+
 function txMatchesEntity(tx, parsed, entityType) {
   if (entityType === 'token') {
     if (tokenIdMatches(tx.receipt?.tokenId, parsed)) return true;
@@ -308,26 +347,23 @@ wssMonitor.on('connection', (ws, req) => {
       {
         onStatus: (code, name) => sendJson(ws, { type: 'status', code, name }),
 
-        onBlock: (blockNumber) => {
+        onBlock: (blockNumber, items) => {
           if (closed) return;
-          client.getBlockTransactions({ blockNumber })
-            .then(txs => {
-              if (closed) return;
-              const matches = txs.filter(tx => txMatchesEntity(tx, parsed, entityType));
-              if (matches.length > 0) {
-                sendJson(ws, {
-                  type: 'match',
-                  blockNumber,
-                  transactions: safeJson(matches),
-                  receivedAt: Date.now(),
-                });
-              }
-              sendJson(ws, { type: 'scanned', blockNumber, receivedAt: Date.now() });
-            })
-            // A single block can transiently fail to decode right as it lands
-            // (blockAccess service can lag a moment behind the subscriber stream) —
-            // this is not fatal to the connection, so it gets its own message type.
-            .catch(err => sendJson(ws, { type: 'blockError', blockNumber, message: err.message }));
+          try {
+            const txs = decodeTransactionsFromItems(items);
+            const matches = txs.filter(tx => txMatchesEntity(tx, parsed, entityType));
+            if (matches.length > 0) {
+              sendJson(ws, {
+                type: 'match',
+                blockNumber,
+                transactions: safeJson(matches),
+                receivedAt: Date.now(),
+              });
+            }
+            sendJson(ws, { type: 'scanned', blockNumber, receivedAt: Date.now() });
+          } catch (err) {
+            sendJson(ws, { type: 'blockError', blockNumber, message: err.message });
+          }
         },
 
         onError: (err) => sendJson(ws, { type: 'error', message: err.message }),

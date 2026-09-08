@@ -6,38 +6,186 @@ import { formatNumber, formatHbar, formatTxType, formatTransactionId, getStatusV
 
 const ID_PATTERN = /^(?:\d+\.\d+\.)?\d+$/;
 
+function Field({ label, value, mono = false }) {
+  if (value === null || value === undefined || value === '') return null;
+  return (
+    <div className="tx-field">
+      <span className="tx-field-label">{label}</span>
+      <span className={`tx-field-value${mono ? ' mono' : ''}`}>{value}</span>
+    </div>
+  );
+}
+
+function TransferList({ transfers }) {
+  if (!transfers?.length) return null;
+  return (
+    <>
+      {transfers.map((t, i) => {
+        const amount = Number(t.amount);
+        const isPos  = amount >= 0;
+        return (
+          <div key={i} className="transfer-row">
+            <span className="mono" style={{ color: 'var(--text-2)', fontSize: 11 }}>
+              {t.accountId?.accountNum ? `0.0.${t.accountId.accountNum}` : '—'}
+            </span>
+            <span className={`transfer-amount ${isPos ? 'transfer-positive' : 'transfer-negative'}`}>
+              {isPos ? '+' : ''}{(amount / 1e8).toFixed(8)} ℏ
+            </span>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function TokenTransfers({ tokenTransfers }) {
+  if (!tokenTransfers?.length) return null;
+  return (
+    <div className="tx-detail-extra">
+      <div className="tx-section-title">Token Transfers</div>
+      {tokenTransfers.map((ttl, i) => {
+        const tid = ttl.tokenId
+          ? `${ttl.tokenId.shardNum ?? 0}.${ttl.tokenId.realmNum ?? 0}.${ttl.tokenId.tokenNum ?? ttl.tokenId.accountNum ?? '?'}`
+          : '—';
+        return (
+          <div key={i} style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 4 }}>
+              Token: <span className="mono" style={{ color: 'var(--blue)' }}>{tid}</span>
+            </div>
+            {ttl.transfers?.map((t, j) => (
+              <div key={j} className="transfer-row">
+                <span className="mono" style={{ color: 'var(--text-2)', fontSize: 11 }}>
+                  0.0.{t.accountId?.accountNum}
+                </span>
+                <span className={`transfer-amount ${Number(t.amount) >= 0 ? 'transfer-positive' : 'transfer-negative'}`}>
+                  {Number(t.amount) >= 0 ? '+' : ''}{t.amount}
+                </span>
+              </div>
+            ))}
+            {ttl.nftTransfers?.map((n, j) => (
+              <div key={`nft-${j}`} className="transfer-row">
+                <span style={{ fontSize: 11, color: 'var(--text-2)' }}>NFT #{n.serialNumber}</span>
+                <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                  {n.senderAccountId?.accountNum} → {n.receiverAccountId?.accountNum}
+                </span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TransactionDetailInline({ tx }) {
+  const txId    = formatTransactionId(tx.transactionId);
+  const status  = tx.receipt?.statusName ?? tx.status;
+  const fee     = tx.transactionFee ? formatHbar(tx.transactionFee) : null;
+  const payer   = tx.transactionId?.accountId?.accountNum
+    ? `0.0.${tx.transactionId.accountId.accountNum}` : null;
+
+  let consensusTs = null;
+  if (tx.consensusTimestamp) {
+    const sec  = Number(tx.consensusTimestamp.seconds);
+    const nano = String(tx.consensusTimestamp.nanos ?? 0).padStart(9, '0');
+    consensusTs = `${new Date(sec * 1000).toUTCString()} (${sec}.${nano})`;
+  }
+
+  return (
+    <div className="tx-inline-detail">
+      <div className="tx-inline-grid">
+        <div className="tx-detail-section">
+          <div className="tx-section-title">Transaction</div>
+          <Field label="ID" value={txId} mono />
+          <Field label="Type" value={formatTxType(tx.type)} />
+          <Field label="Status" value={status} />
+          <Field label="Fee" value={fee} mono />
+          <Field label="Payer" value={payer} mono />
+          <Field label="Block" value={`#${formatNumber(tx.blockNumber)}`} mono />
+          <Field label="Consensus time" value={consensusTs} mono />
+          {tx.memo && <Field label="Memo" value={tx.memo} />}
+        </div>
+
+        <div className="tx-detail-section">
+          {tx.receipt && (
+            <>
+              <div className="tx-section-title">Receipt</div>
+              {tx.receipt.accountId?.accountNum && (
+                <Field label="Created account" value={`0.0.${tx.receipt.accountId.accountNum}`} mono />
+              )}
+              {tx.receipt.tokenId?.tokenNum && (
+                <Field label="Token ID" value={`0.0.${tx.receipt.tokenId.tokenNum}`} mono />
+              )}
+              {tx.receipt.topicId?.topicNum && (
+                <Field label="Topic ID" value={`0.0.${tx.receipt.topicId.topicNum}`} mono />
+              )}
+            </>
+          )}
+
+          {tx.transfers?.length > 0 && (
+            <>
+              <div className="tx-section-title" style={{ marginTop: tx.receipt ? 14 : 0 }}>
+                HBAR Transfers
+              </div>
+              <TransferList transfers={tx.transfers} />
+            </>
+          )}
+        </div>
+      </div>
+
+      <TokenTransfers tokenTransfers={tx.tokenTransfers} />
+
+      <div style={{ marginTop: 10 }}>
+        <Link
+          to={`/explorer?block=${tx.blockNumber}`}
+          className="badge badge-neutral"
+          style={{ textDecoration: 'none' }}
+        >
+          View block #{formatNumber(tx.blockNumber)} →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function MatchRow({ tx }) {
+  const [expanded, setExpanded] = useState(false);
+  const status  = tx.receipt?.statusName ?? tx.status;
+  const statusV = getStatusVariant(status);
+  const txId    = formatTransactionId(tx.transactionId);
+
+  return (
+    <div className={`stream-item stream-tx-item clickable-row${expanded ? ' row-expanded' : ''}`}>
+      <div onClick={() => setExpanded(e => !e)} style={{ cursor: 'pointer' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span className="stream-tx-type">{formatTxType(tx.type)}</span>
+          {status && <span className={`badge badge-${statusV}`} style={{ fontSize: 10 }}>{status}</span>}
+        </div>
+        <span className="stream-tx-id">{truncate(txId, 24, 12)}</span>
+        <div style={{ display: 'flex', gap: 8, marginTop: 2, alignItems: 'center' }}>
+          <span className="badge badge-neutral" style={{ fontSize: 10 }}>
+            blk #{formatNumber(tx.blockNumber)}
+          </span>
+          {tx.transactionFee && (
+            <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--mono)' }}>
+              {formatHbar(tx.transactionFee)}
+            </span>
+          )}
+          <span className={`chevron${expanded ? ' open' : ''}`} style={{ marginLeft: 'auto' }}>▶</span>
+        </div>
+      </div>
+      {expanded && <TransactionDetailInline tx={tx} />}
+    </div>
+  );
+}
+
 function MatchFeed({ matches }) {
   return (
     <div className="stream-list">
       {matches.length === 0 && <div className="empty">No matching transactions yet…</div>}
-      {matches.map((tx, i) => {
-        const status  = tx.receipt?.statusName ?? tx.status;
-        const statusV = getStatusVariant(status);
-        const txId    = formatTransactionId(tx.transactionId);
-        return (
-          <div key={txId + '-' + i} className="stream-item stream-tx-item">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="stream-tx-type">{formatTxType(tx.type)}</span>
-              {status && <span className={`badge badge-${statusV}`} style={{ fontSize: 10 }}>{status}</span>}
-            </div>
-            <span className="stream-tx-id">{truncate(txId, 24, 12)}</span>
-            <div style={{ display: 'flex', gap: 8, marginTop: 2, alignItems: 'center' }}>
-              <Link
-                to={`/explorer?block=${tx.blockNumber}`}
-                className="badge badge-neutral"
-                style={{ fontSize: 10, textDecoration: 'none' }}
-              >
-                blk #{formatNumber(tx.blockNumber)}
-              </Link>
-              {tx.transactionFee && (
-                <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--mono)' }}>
-                  {formatHbar(tx.transactionFee)}
-                </span>
-              )}
-            </div>
-          </div>
-        );
-      })}
+      {matches.map((tx, i) => (
+        <MatchRow key={formatTransactionId(tx.transactionId) + '-' + i} tx={tx} />
+      ))}
     </div>
   );
 }
